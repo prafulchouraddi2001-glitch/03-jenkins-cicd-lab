@@ -54,32 +54,37 @@ pipeline {
         }
 
         stage("Deploy to EC2") {
-            steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: "aws-ec2-deploy",
-                        keyFileVariable: "SSH_KEY",
-                        usernameVariable: "SSH_USER"
-                    )
-                ]) {
-                    sh '''
-                        docker save jenkins-cicd-lab:${BUILD_NUMBER} | gzip | \
-                        ssh \
-                            -i "$SSH_KEY" \
-                            -o StrictHostKeyChecking=no \
-                            -o UserKnownHostsFile=/dev/null \
-                            "$SSH_USER@ec2-3-110-48-174.ap-south-1.compute.amazonaws.com" \
-                            'gunzip | docker load'
+           steps {
+              withCredentials([
+                sshUserPrivateKey(
+                  credentialsId: "aws-ec2-deploy",
+                  keyFileVariable: "SSH_KEY",
+                  usernameVariable: "SSH_USER"
+                )
+        ]) {
+            sh '''
+                IMAGE_TAG="jenkins-cicd-lab:${BUILD_NUMBER}"
 
-                        ssh \
-                            -i "$SSH_KEY" \
-                            -o StrictHostKeyChecking=no \
-                            -o UserKnownHostsFile=/dev/null \
-                            "$SSH_USER@ec2-3-110-48-174.ap-south-1.compute.amazonaws.com" \
-                            'docker stop jenkins-cicd-lab || true; docker rm jenkins-cicd-lab || true; docker run -d --name jenkins-cicd-lab -p 80:5000 jenkins-cicd-lab:${BUILD_NUMBER}'
-                    '''
-                }
-            }
+                docker save "$IMAGE_TAG" | gzip | \
+                ssh \
+                    -i "$SSH_KEY" \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    "$SSH_USER@ec2-3-110-48-174.ap-south-1.compute.amazonaws.com" \
+                    'gunzip | docker load'
+
+                ssh \
+                    -i "$SSH_KEY" \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    "$SSH_USER@ec2-3-110-48-174.ap-south-1.compute.amazonaws.com" \
+                    "docker stop jenkins-cicd-lab || true; \
+                     docker rm jenkins-cicd-lab || true; \
+                     docker run -d \
+                       --name jenkins-cicd-lab \
+                       -p 80:5000 \
+                       $IMAGE_TAG"
+            '''
         }
     }
 }
