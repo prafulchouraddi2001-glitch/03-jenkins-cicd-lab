@@ -1,186 +1,287 @@
 # Jenkins CI/CD Lab
 
-A hands-on DevOps project demonstrating a complete CI/CD pipeline using GitHub, Jenkins, Docker, and AWS EC2.
+A hands-on DevOps project that builds, tests, containerizes, and deploys a Flask application to **AWS EC2 using Jenkins CI/CD**.
 
-The pipeline automatically checks out the application source code, runs automated tests, builds a Docker image, connects to an AWS EC2 deployment server over SSH, transfers the Docker image, and deploys the application container.
+The pipeline connects **GitHub → Jenkins Controller → Jenkins Agent → Docker → AWS EC2**, with automated testing and SSH-based deployment.
 
 ---
 
-## 🎯 Project Objective
+## 🚀 What This Project Demonstrates
 
-The objective of this project is to build and understand a practical Jenkins-based CI/CD pipeline rather than only configuring Jenkins in isolation.
-
-The final pipeline demonstrates:
-
-- Git-based source control
 - Jenkins Controller and Agent architecture
-- Pipeline as Code using a `Jenkinsfile`
+- Pipeline as Code with `Jenkinsfile`
+- GitHub source control
 - Automated application testing
 - Docker image building
-- Jenkins credential management
-- SSH-based deployment
-- AWS EC2 deployment
+- Jenkins-managed SSH credentials
+- SSH-based deployment to AWS EC2
 - Docker image transfer between environments
 - Automated container replacement
+- Build-number-based Docker image tagging
 
 ---
 
 ## 🏗️ Architecture
 
 ```text
-                    GitHub
-                      │
-                      │ Source Code
-                      ▼
-              Jenkins Controller
-                      │
-                      │ Pipeline
-                      ▼
-               Jenkins Agent
-                      │
-          ┌───────────┼───────────┐
-          │           │           │
-       Checkout      Test     Docker Build
-                                  │
-                                  │
-                                  ▼
-                         Docker Image
-                                  │
-                                  │ SSH
-                                  ▼
-                           AWS EC2 Server
-                                  │
-                                  │ docker load
-                                  ▼
-                         Docker Container
-                                  │
-                                  │
-                                  ▼
-                         Application :5000
-                                  │
-                         EC2 Port 80
-                                  │
-                                  ▼
-                              Browser
+                         GitHub
+                            │
+                            │ git checkout
+                            ▼
+                   Jenkins Controller
+                            │
+                            │ Pipeline
+                            ▼
+                     Jenkins Agent
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+           Checkout        Test      Docker Build
+                                           │
+                                           ▼
+                                  Docker Image
+                                           │
+                                           │ SSH
+                                           ▼
+                                     AWS EC2
+                                           │
+                                    docker load
+                                           │
+                                           ▼
+                                  Docker Container
+                                           │
+                                    Port 5000
+                                           │
+                                    EC2 Port 80
+                                           │
+                                           ▼
+                                        Browser
 ```
 
-🔄 CI/CD Pipeline
+---
 
-The Jenkins pipeline contains the following stages:
+## 🔄 CI/CD Pipeline
+
+The Jenkins pipeline executes these stages:
+
 ```text
-           docker save
-                ↓
-               gzip
-                ↓
-               SSH
-                ↓
-              gunzip
-                ↓
-          docker load
+Checkout
+   ↓
+EC2 SSH Test
+   ↓
+Test
+   ↓
+Docker Build
+   ↓
+Deploy to EC2
 ```
 
-1. Checkout
-Jenkins checks out the application source code from the GitHub repository.
-2. EC2 SSH Test
-Jenkins retrieves the stored SSH credential and verifies that the Jenkins Agent can connect to the AWS EC2 deployment server.
-The test verifies:
+### 1. Checkout
+
+Jenkins checks out the application source code from GitHub.
+
+### 2. EC2 SSH Test
+
+Jenkins retrieves the EC2 SSH credential from Jenkins Credentials and verifies connectivity to the deployment server.
+
+The stage verifies:
+
 - Remote user
 - EC2 hostname
 - Docker installation
-3. Test
-A dedicated Docker test image is built from Dockerfile.test.
-The application tests are then executed inside the test container.
-The current test suite verifies:
-- /
-- /health
-4. Docker Build
-Jenkins builds the application image:
-jenkins-cicd-lab:<BUILD_NUMBER>
-The Jenkins build number is used as the image tag so individual builds can be identified.
-5. Deploy to EC2
-The Docker image is transferred from the Jenkins Agent to AWS EC2.
 
-The process is:
+### 3. Test
+
+A dedicated Docker image is built using `Dockerfile.test`.
+
+The application test suite runs inside the test container.
+
+Current tests:
+
+- `test_home`
+- `test_health`
+
+If the tests fail, the pipeline stops before deployment.
+
+### 4. Docker Build
+
+Jenkins builds the application image using the current Jenkins build number:
+
 ```text
-             docker save
-                  ↓
-                 gzip
-                  ↓
-                 SSH
-                  ↓
-                gunzip
-                  ↓
-             docker load
+jenkins-cicd-lab:<BUILD_NUMBER>
 ```
 
-After loading the image, Jenkins remotely:
-1. Stops the previous application container if it exists.
-2. Removes the previous container.
-3. Starts the new container.
-4. Maps EC2 port 80 to container port 5000.
+For example:
 
+```text
+jenkins-cicd-lab:13
+```
 
-🐳 Docker
-The application container uses:
+This makes individual deployment builds identifiable.
 
-  Python 3.14
-  Flask
+### 5. Deploy to EC2
 
-The application exposes:
-   Container: 5000
+The Docker image is transferred from the Jenkins Agent to AWS EC2.
 
-The EC2 deployment exposes:
-   EC2: 80 → Container: 5000
-
-🤖 Jenkins Architecture
-This project uses separate Jenkins Controller and Agent components.
-
-Jenkins Controller
-   The Controller coordinates the pipeline and manages Jenkins configuration.
-
+```text
 Jenkins Agent
-    The Agent executes the actual pipeline workload.
+     │
+     │ docker save
+     ▼
+   gzip
+     │
+     │ SSH
+     ▼
+   gunzip
+     │
+     ▼
+ docker load
+     │
+     ▼
+AWS EC2 Docker
+```
 
-The custom Jenkins Agent image contains:
-- Java/Jenkins inbound agent
+After loading the image, Jenkins:
+
+1. Stops the existing application container.
+2. Removes the existing container.
+3. Starts the new container.
+4. Maps EC2 port `80` to container port `5000`.
+
+---
+
+## 🧪 Application
+
+The project uses a small Flask application specifically so the focus remains on the CI/CD infrastructure.
+
+### Endpoints
+
+```text
+GET /
+GET /health
+```
+
+Example response:
+
+```json
+{
+  "message": "Hello from Jenkins CI/CD Lab!"
+}
+```
+
+Health endpoint:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+---
+
+## 🐳 Docker
+
+The application runs in a Python 3.14 Docker image.
+
+```text
+Application container
+        │
+        │ port 5000
+        ▼
+     EC2 port 80
+```
+
+The repository contains two Dockerfiles:
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Builds the application image |
+| `Dockerfile.test` | Builds the test image used by Jenkins |
+
+---
+
+## 🤖 Jenkins Architecture
+
+The project uses separate Jenkins Controller and Agent components.
+
+### Controller
+
+The Jenkins Controller coordinates the pipeline and manages Jenkins configuration.
+
+### Agent
+
+The Jenkins Agent executes the actual pipeline workload.
+
+A custom agent image was created because the standard inbound agent did not contain all the tools required by the pipeline.
+
+### Custom Agent Tools
+
+The custom image provides:
+
+- Jenkins inbound agent
+- Java
 - Python
 - pip
 - Git
 - Docker CLI
 - OpenSSH client
 
-The Agent also has access to the Docker socket in this local lab environment so that it can build Docker images.
+The custom image is defined in:
 
-🔐 Jenkins Credentials
-  The EC2 deployment uses a Jenkins-managed SSH credential.
+```text
+jenkins-agent.Dockerfile
+```
 
-Credential ID:
-   aws-ec2-deploy
+---
 
-The private key is stored inside Jenkins credentials rather than inside the repository.
+## 🔐 Credentials and SSH
 
-The Jenkinsfile retrieves the credential using:
+The EC2 deployment uses a Jenkins-managed SSH credential.
 
-    withCredentials([
-         sshUserPrivateKey(...)
-    ])
+The private key is stored in **Jenkins Credentials** and is not committed to Git.
 
-Private keys and secrets are not stored in Git.
+The pipeline retrieves the credential at runtime using:
 
-☁️ AWS EC2
+```groovy
+withCredentials([
+    sshUserPrivateKey(
+        credentialsId: "aws-ec2-deploy",
+        keyFileVariable: "SSH_KEY",
+        usernameVariable: "SSH_USER"
+    )
+])
+```
+
+The private key itself is never stored in the repository.
+
+---
+
+## ☁️ AWS EC2
+
 The deployment target is an Amazon EC2 instance running:
+
 - Amazon Linux 2023
 - Docker
 - Git
 
-The application is deployed as a Docker container.
+The application is exposed through:
 
-The EC2 security group allows:
-- SSH on port 22 from the configured source IP
-- HTTP on port 80
+```text
+EC2 :80
+   ↓
+Container :5000
+```
 
-📁 Repository Structure
+The EC2 security group used for the lab allows:
 
+- SSH (`22`) from the configured source IP
+- HTTP (`80`) for application access
+
+---
+
+## 📁 Repository Structure
+
+```text
 03-jenkins-cicd-lab/
 │
 ├── app/
@@ -194,169 +295,188 @@ The EC2 security group allows:
 ├── Jenkinsfile
 ├── jenkins-agent.Dockerfile
 ├── requirements.txt
+├── README.md
 └── .gitignore
+```
 
-🧪 Application Tests
-The application currently contains two basic tests:
-    test_home
-    test_health
+---
 
-Tests are executed automatically by Jenkins before the Docker deployment stage.
+## 🧠 Key Troubleshooting Lessons
 
-If the tests fail, the pipeline stops before deployment.
+This project involved several real Jenkins and CI/CD troubleshooting scenarios.
 
-This ensures that a failed build is not automatically deployed.
+### Jenkins Agent Connection
 
-🛠️ Custom Jenkins Agent
-The custom agent is defined in:
+The inbound agent initially failed to connect because the agent secret was configured incorrectly.
 
-    jenkins-agent.Dockerfile
+**Resolution:** recreated the agent with the correct secret and WebSocket configuration.
 
-The image extends:
+### Missing Agent Tooling
 
-    jenkins/inbound-agent:jdk21
+The standard Jenkins inbound agent did not contain the Python and Docker CLI tools required by the pipeline.
 
-and installs the tools required by the pipeline.
+**Resolution:** created a custom Jenkins Agent image.
 
-This demonstrates how Jenkins agents can be customized according to build requirements.
+### Docker Socket Access
 
-🧠 Troubleshooting Lessons:
+The Jenkins Agent required Docker daemon access to build images.
 
-    This project involved several real-world Jenkins troubleshooting scenarios.
+For this local Docker Desktop lab, the Docker socket was mounted into the agent.
 
-Jenkins Agent Connection-
-    The inbound Jenkins Agent initially failed to connect because the Jenkins secret was configured incorrectly.
+**Production consideration:** Docker socket access provides significant control over the Docker host and requires stronger isolation and security controls in production.
 
-    The issue was resolved by using the correct agent secret and WebSocket connection.
+### Jenkinsfile UTF-8 BOM
 
-Agent Tooling-
-    The default inbound agent image did not contain the Python and Docker CLI tools required by the pipeline.
+The Jenkinsfile initially contained a UTF-8 BOM.
 
-    A custom Jenkins Agent image was created to provide the required tooling.
+Jenkins consequently failed to recognize the Declarative Pipeline DSL.
 
-Docker Socket Access-
-    The Jenkins Agent required access to the Docker daemon for Docker builds.
+**Resolution:** removed the BOM and committed the corrected Jenkinsfile.
 
-    In this local Docker Desktop lab, the Docker socket was mounted into the agent and the required group access was configured.
+### Declarative Pipeline Structure
 
-    This is a powerful capability and should be hardened appropriately in production environments.
+The deployment stage was initially placed outside the `stages` block.
 
-Jenkinsfile UTF-8 BOM-
-    The Jenkinsfile initially contained a UTF-8 BOM.
+Jenkins reported:
 
-    This caused Jenkins to interpret the beginning of the file incorrectly and report that the pipeline DSL was unavailable.
+```text
+No such DSL method 'steps'
+```
 
-    The BOM was removed and the pipeline then loaded correctly.
+**Resolution:** corrected the Declarative Pipeline structure so every stage resides inside:
 
-Declarative Pipeline Structure-
-    The deployment stage was initially placed outside the stages block.
+```groovy
+stages {
+    ...
+}
+```
 
-    Jenkins reported:
+### Remote Build Number
 
-        No such DSL method 'steps'
+The deployment initially attempted to use Jenkins' `BUILD_NUMBER` directly inside the remote EC2 shell.
 
-    The stage structure was corrected so that all stages are contained within:
+The variable exists in the Jenkins environment, not automatically on EC2.
 
-        stages {
-             ...
-        }
+**Resolution:** the image tag is resolved on the Jenkins Agent first and then passed to the EC2 deployment command.
 
-Remote Environment Variables-
-    The initial deployment attempted to use:
+---
 
-         ${BUILD_NUMBER}
+## 🔒 Security Notes
 
-    inside the remote EC2 shell.
+This project is a learning lab, so several areas use simplified configurations.
 
-    BUILD_NUMBER is a Jenkins environment variable and is not automatically available on the EC2 server.
+### SSH Host Verification
 
-    The pipeline was corrected by creating the image tag on the Jenkins Agent first and then sending the resolved tag to EC2.
+The lab deployment uses:
 
-🔒 Security Considerations-
-    This project is a learning lab and contains several deliberate simplifications.
+```text
+StrictHostKeyChecking=no
+UserKnownHostsFile=/dev/null
+```
 
-SSH Host Verification-
-    The deployment currently uses:
+This avoids interactive host-key confirmation during automated deployment.
 
-    StrictHostKeyChecking=no
+A production implementation should verify and manage the EC2 host key properly.
 
-and:
-    UserKnownHostsFile=/dev/null
+### Docker Socket
 
-This avoids interactive host verification during the lab.
+The Jenkins Agent has Docker socket access so it can build Docker images.
 
-A production deployment should verify and manage the EC2 host key properly.
+This provides powerful access to the Docker host and should be carefully isolated in production.
 
-Docker Socket-
-    The Jenkins Agent has access to the Docker socket so that it can build Docker images.
+### Secrets
 
-    Access to the Docker socket provides significant control over the Docker host and should be carefully secured in production.
+Private SSH keys and Jenkins secrets are not stored in Git.
 
-SSH Credentials-
-    Private SSH keys should remain inside Jenkins Credentials and must never be committed to Git.
+---
 
-AWS Cost-
-    The EC2 instance is a paid AWS resource even though the lab uses cost-control measures.
+## ✅ Deployment Result
 
-    The instance should be stopped when it is not needed.
-
-📊 Successful Deployment-
 The completed pipeline successfully demonstrated:
 
+```text
 GitHub
-   ↓
+  ↓
 Jenkins Controller
-   ↓
+  ↓
 Jenkins Agent
-   ↓
+  ↓
 Automated Tests
-   ↓
+  ↓
 Docker Build
-   ↓
+  ↓
 SSH to AWS EC2
-   ↓
+  ↓
 Docker Image Transfer
-   ↓
+  ↓
 Docker Load
-   ↓
+  ↓
 Container Replacement
-   ↓
+  ↓
 Application Running on EC2
+```
 
-The successful deployment was verified through a web browser against the EC2 public IP.
+The deployment was successfully verified by accessing the application through the EC2 public IP.
 
-🚀 Future Improvements
-Possible future improvements include:
+---
+
+## 📊 Pipeline Result
+
+A successful pipeline build performs the complete workflow automatically:
+
+| Stage | Result |
+|---|---|
+| GitHub Checkout | ✅ |
+| EC2 SSH Connectivity | ✅ |
+| Automated Tests | ✅ |
+| Docker Image Build | ✅ |
+| Docker Image Transfer | ✅ |
+| EC2 Deployment | ✅ |
+| Application Deployment | ✅ |
+
+---
+
+## 🔮 Future Improvements
+
+Potential improvements for a more production-oriented implementation:
+
+- GitHub webhook-triggered builds
 - Docker BuildKit / buildx
 - Amazon ECR for image storage
 - HTTPS/TLS
-- Proper SSH host-key verification
-- Terraform for AWS infrastructure
-- Ansible for configuration management
+- Proper SSH host-key management
+- Terraform-managed AWS infrastructure
+- Ansible configuration management
 - Kubernetes deployment
 - Amazon EKS
-- Monitoring and logging
+- Monitoring and centralized logging
 - Deployment rollback strategy
 - Blue/green or rolling deployments
-- Automated GitHub webhook triggering
-These improvements are intentionally outside the current project's core scope.
 
-📚 Technologies Used
-- Git
-- GitHub
-- Jenkins
-- Jenkins Pipeline
-- Jenkins Agents
-- Groovy
-- Python
-- Flask
-- Docker
-- SSH
-- AWS EC2
-- Amazon Linux 2023
-- PowerShell
+These are intentionally outside the scope of this project.
 
-✅ Project Status
-Project 3 — Jenkins CI/CD Lab: Completed
+---
 
-GitHub → Jenkins Controller → Jenkins Agent → Test → Docker Build → SSH → EC2 → Docker → Running application
+## 🛠️ Technology Stack
+
+```text
+Git
+GitHub
+Jenkins
+Groovy
+Python
+Flask
+Docker
+SSH
+AWS EC2
+Amazon Linux 2023
+PowerShell
+```
+
+---
+
+## 📌 Project Status
+
+**Project 3 — Jenkins CI/CD Lab: Completed**
+
+The project demonstrates an end-to-end Jenkins CI/CD workflow that automatically tests, builds, and deploys a Dockerized application to AWS EC2.
