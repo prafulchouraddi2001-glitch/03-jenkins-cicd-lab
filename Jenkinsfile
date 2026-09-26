@@ -10,6 +10,27 @@ pipeline {
             }
         }
 
+        stage("EC2 SSH Test") {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: "aws-ec2-deploy",
+                        keyFileVariable: "SSH_KEY",
+                        usernameVariable: "SSH_USER"
+                    )
+                ]) {
+                    sh '''
+                        ssh \
+                            -i "$SSH_KEY" \
+                            -o StrictHostKeyChecking=no \
+                            -o UserKnownHostsFile=/dev/null \
+                            "$SSH_USER@ec2-3-110-48-174.ap-south-1.compute.amazonaws.com" \
+                            'whoami && hostname && docker --version'
+                    '''
+                }
+            }
+        }
+
         stage("Test") {
             steps {
                 sh '''
